@@ -1,0 +1,7 @@
+
+chatclient.o
+client
+otp_enc.c
+chatclient
+.vscode/launch.json
+.DS_Store
