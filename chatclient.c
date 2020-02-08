@@ -102,9 +102,9 @@ int main(int argc, char *argv[])
 	memset(msg, '\0', sizeof(msg));
 	fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
 	buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
-    int size = (int)log10(strlen(buffer))+2;
+    int size = round(log10(strlen(buffer)))+2;
     char len[size];
-	sprintf(len, "%ld", strlen(buffer));
+	sprintf(len, "%ld", strlen(buffer)+size);
 	strcat(len, " ");
     strcat(msg, len);
 	strcat(msg, buffer);
