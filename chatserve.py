@@ -1,8 +1,16 @@
 import socket
+import sys
+
+CHARMAX = 504
 
 def main():
+
+    if len(sys.argv) != 2:
+        print("Invalid argument count")
+        return
+
     s = socket.socket()
-    port = 12345
+    port = int(sys.argv[1])
 
     # bind socket to port
     s.bind( ('', port) )
@@ -11,10 +19,18 @@ def main():
     s.listen(5)
 
     while True:
-        c, addr = s.accept()
-        print("Got Connection from:", addr)
+        connection, addr = s.accept()
+        print("Connected to", addr)
+        msg = ""
+        while True:
+            data = connection.recv(CHARMAX)
+            msg += str(data.decode())
+            print("From client", msg)
 
-        c.send("From chatserver!")
-        c.close()
+            if "\n" in msg:
+                break
+        print("From client", msg)
+        connection.sendall(msg)
+        connection.close()
 
 main()

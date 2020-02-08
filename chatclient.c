@@ -6,9 +6,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
+#include <math.h>
 
-#define CHARMAX 501
-
+#define MSGMAX 504
+#define INMAX 500
 
 /***********************************************
 ** Function: Error Handler
@@ -70,8 +71,8 @@ int main(int argc, char *argv[])
 	int socketFD, portNumber, charsWritten, charsRead;
 	struct sockaddr_in serverAddress;
 	struct hostent* serverHostInfo;
-	char buffer[256];
-    
+	char buffer[INMAX]; 
+	char msg[MSGMAX]; 	// buffer for <num of bytes> + ' ' <msg>
 	if (argc < 3) { 
 		fprintf(stderr,"USAGE: %s hostname port\n", argv[0]); 
 		exit(0); 
@@ -98,11 +99,18 @@ int main(int argc, char *argv[])
 	// Get input message from user
 	printf("CLIENT: Enter text to send to the server, and then hit enter: ");
 	memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
+	memset(msg, '\0', sizeof(msg));
 	fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
 	buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+    int size = (int)log10(strlen(buffer))+2;
+    char len[size];
+	sprintf(len, "%ld", strlen(buffer));
+	strcat(len, " ");
+    strcat(msg, len);
+	strcat(msg, buffer);
 
 	// Send message to server
-	charsWritten = send(socketFD, buffer, strlen(buffer), 0); // Write to the server
+	charsWritten = send(socketFD, msg, strlen(msg), 0); // Write to the server
 	if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
 	if (charsWritten < strlen(buffer)) printf("CLIENT: WARNING: Not all data written to socket!\n");
 
