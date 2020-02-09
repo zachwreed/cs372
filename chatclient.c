@@ -28,19 +28,19 @@ void error(const char *msg) {
 ** Descripton: Receives message from chatserve
 ** Prerequisite: buffer is memset to null, bSize contains positive integer, flag contains positive integer. Called within child of spawnPid
 ************************************************/
-int recvMsg(int connectionFD, char* buffer, int bSize, int flag) {
-	int charsRead, charsTotal, count = 0;
-	int size = -1;
-	char * ptr;
+int recvMsg(int socketFD, char* buffer, int bSize, int flag) {
+	int charsRead, charsTotal, count = 0; // stores recv() data, num of loops
+	int size = -1;	// stores strlen(buffer) of server resposne
+	char * ptr;		// stores msg portion of server response
 
 	// While buffer doesn't contain endline
 	while(size != charsTotal) {
-		charsRead = recv(connectionFD, buffer + charsTotal, bSize, flag);
-		// printf("Before> %s\n", buffer);
+		charsRead = recv(socketFD, buffer + charsTotal, bSize, flag);
 		if (charsRead < 0) {
 			perror("Error from reading:");
 			exit(1);
 		}
+		// Parse <num bytes> from first packet
 		if (count == 0) {
 			ptr = strchr(buffer, ' ');
 			size = atoi(buffer);
@@ -49,15 +49,14 @@ int recvMsg(int connectionFD, char* buffer, int bSize, int flag) {
 		}
 		charsTotal += charsRead;	// add to offset next receive
 	}
-
+	// If server reponses with quit, return negative value
 	if (strcmp(ptr, "\\quit") == 0) {
 		return -1;
 	}
-
+	// Print server response
 	printf("Server> %s\n", ptr);
 	return charsTotal;
 }
-
 
 /***********************************************
 ** Function: Send Message
@@ -65,45 +64,40 @@ int recvMsg(int connectionFD, char* buffer, int bSize, int flag) {
 ** Prerequisite: buffer is memset to null, bSize contains positive integer, flag contains positive integer. Called within child of spawnPid
 ************************************************/
 int sendMsg(int socketFD, char* buffer, int flag) {
-		char msg[MSGMAX]; 					// buffer for <num of bytes> + ' ' <msg>
-		char sizeBStr[LENMAX];
-		char sizeStr[LENMAX];
-		char len[LENMAX];
+		// Init variables
+		char msg[MSGMAX]; 		// buffer for <num of bytes> + ' ' <msg>
+		char sizeBStr[LENMAX];	// Stores <str(strlen(buffer))>
+		char sizeStr[LENMAX];	// Stores <sizeBStr> + size + 1/2
+		char len[LENMAX];		// stores result from sizeStr
+		int charsWritten = 0;	// stores send() return
+		int charsTotal = 0;		// stores send() returns
 		memset(msg, '\0', sizeof(msg));
 		memset(len, '\0', sizeof(len));
 		memset(sizeBStr, '\0', sizeof(sizeBStr));
 		memset(sizeStr, '\0', sizeof(sizeStr));
 
-		// printf("after setup and memset\n");
-
 		// Buffer length to string
 		int sizeB = strlen(buffer);
 		sprintf(sizeBStr, "%d", sizeB);
-
-				// printf("after buffer len to string\n");
 
 		// sizeStr = buff length + sizeB + 1
 		int size = strlen(sizeBStr) + sizeB + 1;
 		sprintf(sizeStr, "%d", size);
 
-				// printf("after size to string\n");
-
 		// Add buffer length string to be added to message.
 		sprintf(len, "%d", size);
+
 		// If (size+offset) length > (size), add 1 
 		if (strlen(sizeStr) > strlen(sizeBStr)) {
 			memset(len, '\0', sizeof(len));
 			sprintf(len, "%d", (size+1));
 		}
-				// printf("after copy size to len\n");
 
+		// Copy len + " " + buffer to msg
 		strcat(len, " ");
 		strcat(msg, len);
 		strcat(msg, buffer);
 		
-
-		int charsWritten = 0;
-		int charsTotal = 0;
 		// block until all data is sent
 		while (charsTotal < strlen(msg)) {
 			charsWritten = send(socketFD, msg + charsTotal, strlen(msg), 0);
@@ -118,6 +112,11 @@ int sendMsg(int socketFD, char* buffer, int flag) {
 	return charsTotal;
 }
 
+/***********************************************
+** Function: Get Handle
+** Description: Prompts user for chat handle to use during session
+** Prerequisite: None
+************************************************/
 char* getHandle() {
 	char *handle = (char*)malloc(HANDLE);
 
@@ -130,81 +129,93 @@ char* getHandle() {
 /***********************************************
 ** Function: Main
 ** Prerequisite: args[] contains:
-**   {'chatclient', serverport }
+**   {'chatclient', machine, serverport }
 ************************************************/
 int main(int argc, char *argv[])
 {
 	// Call with ./client localhost <server port>
 	int socketFD, portNumber, charsWritten, charsRead, charsTotal;
-	struct sockaddr_in serverAddress;
-	struct hostent* serverHostInfo;
-	char buffer[INMAX]; 
-	char msg[MSGMAX]; 	// buffer for <num of bytes> + ' ' <msg>
-	char *handle = malloc(sizeof(char) * HANDLE);
+	struct sockaddr_in serverAddress;	// stores socket address data
+	struct hostent* serverHostInfo;		// stores host connection data
+	char buffer[INMAX]; 				// buffer for input
+	char msg[MSGMAX]; 					// buffer for <bufer strlen> + ' ' <buffer>
+	char *handle = malloc(sizeof(char) * HANDLE);	// stores client handle
 
-
+	// Check args == chatclient <machine> <server port>
 	if (argc < 3) { 
 		fprintf(stderr,"USAGE: %s hostname port\n", argv[0]); 
 		exit(0); 
 	}
 
 	// Set up the server address struct
-	memset((char*)&serverAddress, '\0', sizeof(serverAddress)); // Clear out the address struct
-	portNumber = atoi(argv[2]); // Get the port number, convert to an integer from a string
+	memset((char*)&serverAddress, '\0', sizeof(serverAddress)); // Clear address struct
+	portNumber = atoi(argv[2]); // Get the port number
 	serverAddress.sin_family = AF_INET; // Create a network-capable socket
 	serverAddress.sin_port = htons(portNumber); // Store the port number
-	serverHostInfo = gethostbyname(argv[1]); // Convert the machine name into a special form of address
+	serverHostInfo = gethostbyname(argv[1]); // Convert the machine name into address
 	if (serverHostInfo == NULL) { 
 		fprintf(stderr, "CLIENT: ERROR, no such host\n"); 
 		exit(0); 
-		}
-	memcpy((char*)&serverAddress.sin_addr.s_addr, (char*)serverHostInfo->h_addr, serverHostInfo->h_length); // Copy in the address
+	}
+
+	// Copy the address
+	memcpy((char*)&serverAddress.sin_addr.s_addr, (char*)serverHostInfo->h_addr, serverHostInfo->h_length);
 
 	// Set up the socket
-	
 	socketFD = socket(AF_INET, SOCK_STREAM, 0); // Create the socket
-	if (socketFD < 0) error("CLIENT: ERROR opening socket");
-	
-	// Connect to server
-	if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) // Connect socket to address
+	if (socketFD < 0) {
+		error("CLIENT: ERROR opening socket");
+	}
+
+	// Connect to server & socket to address
+	if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
 		error("CLIENT: ERROR connecting");
+	}
 
 	// Get Handle from User
 	handle = getHandle();
+	// Init variables for loop
 	int sendN = 0;
 	int quit = 0;
-	while(quit != 1) {
-		fflush(stdin);
 
+	/******************
+	 * Chat loop
+	 *****************/
+	while(quit != 1) {
+		fflush(stdin); // clear stdin
+
+		// If new session, send handle to server
 		if (sendN == 0) {
 			sendMsg(socketFD, handle, 0);
 			sendN++;
 			continue;
 		}
 
-		printf("%s> ", handle);
-		memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
-		memset(msg, '\0', sizeof(msg));
-		fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
-		buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+		// Get user Input 
+		printf("%s> ", handle);					
+		memset(buffer, '\0', sizeof(buffer)); 		// Clear Buffer
+		memset(msg, '\0', sizeof(msg));				// Clear Msg
+		fgets(buffer, sizeof(buffer) - 1, stdin); 	// Get input from the user, trunc to buffer - 1 chars, leaving \0
+		buffer[strcspn(buffer, "\n")] = '\0'; 		// Remove the trailing \n
 		
-		// If quit, send quit to server and break loop
+		// If quit input, send quit to server and break loop
 		if (strcmp(buffer, "\\quit") == 0) {
 			sendMsg(socketFD, buffer, 0);
 			break;
 		} 
-
+		// Send message to server
 		sendMsg(socketFD, buffer, 0);
 		sendN++;
 
 		// Get return message from server
-		memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
+		memset(buffer, '\0', sizeof(buffer)); // Clear Buffer
 		charsTotal = recvMsg(socketFD, buffer, MSGMAX, 0);
-
+		// If '\quit' from server
 		if (charsTotal < 0) {
 			break;
 		}
 	}
-	close(socketFD); // Close the socket
+	// Close the socket
+	close(socketFD);
 	return 0;
 }
