@@ -132,7 +132,7 @@ int sendMsg(int socketFD, char* buffer, int flag) {
 char* getHandle() {
 	char *handle = (char*)malloc(HANDLE);
 
-	printf("Enter a handle up to 10 characters: ");
+	printf("Enter a handle up to 5 characters: ");
 	fgets(handle, HANDLE - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
 	handle[strcspn(handle, "\n")] = '\0'; // Remove the trailing \n that fgets adds
 	return handle;
