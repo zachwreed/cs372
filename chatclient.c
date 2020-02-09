@@ -21,8 +21,8 @@
 #include <math.h>
 #include <errno.h>
 
-#define MSGMAX 504
-#define INMAX 500
+#define MSGMAX 514
+#define INMAX 510
 #define HANDLE 12
 #define LENMAX 5
 

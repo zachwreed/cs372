@@ -12,7 +12,7 @@ import sys
 import math
 import string
 
-CHARMAX = 504
+CHARMAX = 514
 
 def recvMsg(connection):
     msg = ""
