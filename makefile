@@ -1,6 +1,6 @@
 # ** Zach Reed
 # ** CS-372
-# ** Makefile for chatserve 
+# ** Makefile for chatclient.c 
 # *********************************************
 
 CXX = gcc	#enables gcc as compiler

@@ -1,3 +1,12 @@
+#******************************************
+# Author: Zach Reed
+# Description: Project 1 Chatserve
+# Date: 2/9/2020
+# References:
+# 1.) Author: Python Software Foundation
+#     Title:  The Python Standard Library - Sockets
+#******************************************
+
 import socket
 import sys
 import math

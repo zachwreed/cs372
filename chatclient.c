@@ -1,3 +1,15 @@
+/***********************************************
+** Author: Zach Reed
+** Description: Project 1 Chatclient
+** Date: 2/9/2020
+** References:
+** 1.) 	Author: Benjamin Brewster
+		Title:  Client Code for Module 4, CS344 Fall 2019
+		Publisher: Oregon State
+** 2.) 	Author: Zach Reed
+		Title:  OTP Program 4 source code, CS344 Fall 2019
+************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -129,7 +141,7 @@ char* getHandle() {
 /***********************************************
 ** Function: Main
 ** Prerequisite: args[] contain:
-**   {'chatclient', machine, serverport }
+**   {chatclient <machine> <server port> }
 ************************************************/
 int main(int argc, char *argv[])
 {
