@@ -12,6 +12,7 @@
 #define MSGMAX 504
 #define INMAX 500
 #define HANDLE 12
+#define LENMAX 5
 
 /***********************************************
 ** Function: Error Handler
@@ -35,9 +36,8 @@ int recvMsg(int connectionFD, char* buffer, int bSize, int flag) {
 	// While buffer doesn't contain endline
 	while(size != charsTotal) {
 		charsRead = recv(connectionFD, buffer + charsTotal, bSize, flag);
-		printf("Server: %s\n", buffer);
+		// printf("Before> %s\n", buffer);
 		if (charsRead < 0) {
-			printf("ERROR reading from socket %d\n", charsRead);
 			perror("Error from reading:");
 			exit(1);
 		}
@@ -46,11 +46,15 @@ int recvMsg(int connectionFD, char* buffer, int bSize, int flag) {
 			size = atoi(buffer);
 			*ptr++ = '\0';
 			count++;
-			printf("Server: %s\n", ptr);
 		}
 		charsTotal += charsRead;	// add to offset next receive
 	}
-	printf("Server: %s\n", ptr);
+
+	if (strcmp(ptr, "\\quit") == 0) {
+		return -1;
+	}
+
+	printf("Server> %s\n", ptr);
 	return charsTotal;
 }
 
@@ -60,19 +64,57 @@ int recvMsg(int connectionFD, char* buffer, int bSize, int flag) {
 ** Descripton: Sends message to chatserve
 ** Prerequisite: buffer is memset to null, bSize contains positive integer, flag contains positive integer. Called within child of spawnPid
 ************************************************/
-int sendMsg(int connectionFD, char* buffer, int flag) {
-	int charsWritten, charsTotal = 0;
-	// block until all data is sent
-	while (charsTotal < strlen(buffer)) {
-		charsWritten = send(connectionFD, buffer + charsTotal, strlen(buffer), flag);
-		if (charsWritten < 0) {
-			error("CLIENT: ERROR writing to socket");
+int sendMsg(int socketFD, char* buffer, int flag) {
+		char msg[MSGMAX]; 					// buffer for <num of bytes> + ' ' <msg>
+		char sizeBStr[LENMAX];
+		char sizeStr[LENMAX];
+		char len[LENMAX];
+		memset(msg, '\0', sizeof(msg));
+		memset(len, '\0', sizeof(len));
+		memset(sizeBStr, '\0', sizeof(sizeBStr));
+		memset(sizeStr, '\0', sizeof(sizeStr));
+
+		// printf("after setup and memset\n");
+
+		// Buffer length to string
+		int sizeB = strlen(buffer);
+		sprintf(sizeBStr, "%d", sizeB);
+
+				// printf("after buffer len to string\n");
+
+		// sizeStr = buff length + sizeB + 1
+		int size = strlen(sizeBStr) + sizeB + 1;
+		sprintf(sizeStr, "%d", size);
+
+				// printf("after size to string\n");
+
+		// Add buffer length string to be added to message.
+		sprintf(len, "%d", size);
+		// If (size+offset) length > (size), add 1 
+		if (strlen(sizeStr) > strlen(sizeBStr)) {
+			memset(len, '\0', sizeof(len));
+			sprintf(len, "%d", (size+1));
 		}
-		if (charsWritten == 0) {
-			break;
+				// printf("after copy size to len\n");
+
+		strcat(len, " ");
+		strcat(msg, len);
+		strcat(msg, buffer);
+		
+
+		int charsWritten = 0;
+		int charsTotal = 0;
+		// block until all data is sent
+		while (charsTotal < strlen(msg)) {
+			charsWritten = send(socketFD, msg + charsTotal, strlen(msg), 0);
+			if (charsWritten < 0) {
+				error("CLIENT: ERROR writing to socket");
+			}
+			if (charsWritten == 0) {
+				break;
+			}
+			charsTotal += charsWritten; // add to offset next send
 		}
-		charsTotal += charsWritten; // add to offset next send
-	}
 	return charsTotal;
 }
 
@@ -93,7 +135,7 @@ char* getHandle() {
 int main(int argc, char *argv[])
 {
 	// Call with ./client localhost <server port>
-	int socketFD, portNumber, charsWritten, charsRead;
+	int socketFD, portNumber, charsWritten, charsRead, charsTotal;
 	struct sockaddr_in serverAddress;
 	struct hostent* serverHostInfo;
 	char buffer[INMAX]; 
@@ -129,74 +171,38 @@ int main(int argc, char *argv[])
 
 	// Get Handle from User
 	handle = getHandle();
+	int sendN = 0;
 	int quit = 0;
 	while(quit != 1) {
 		fflush(stdin);
+
+		if (sendN == 0) {
+			sendMsg(socketFD, handle, 0);
+			sendN++;
+			continue;
+		}
+
 		printf("%s> ", handle);
 		memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
 		memset(msg, '\0', sizeof(msg));
 		fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
 		buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
 		
+		// If quit, send quit to server and break loop
 		if (strcmp(buffer, "\\quit") == 0) {
-			quit = 1;
-		} 
-		
-		int size = floor(log10(abs((int)strlen(buffer))))+2;
-		char len[size];
-		sprintf(len, "%ld", strlen(buffer)+size);
-		strcat(len, " ");
-		// printf("Size: %d\n", size);
-		strcat(msg, len);
-		strcat(msg, buffer);
-
-		charsWritten = 0;
-		int charsTotal = 0;
-		// block until all data is sent
-		while (charsTotal < strlen(msg)) {
-			charsWritten = send(socketFD, msg + charsTotal, strlen(msg), 0);
-			if (charsWritten < 0) {
-				error("CLIENT: ERROR writing to socket");
-			}
-			if (charsWritten == 0) {
-				break;
-			}
-			charsTotal += charsWritten; // add to offset next send
-		}
-
-		if(quit == 1) {
+			sendMsg(socketFD, buffer, 0);
 			break;
-		}
+		} 
+
+		sendMsg(socketFD, buffer, 0);
+		sendN++;
 
 		// Get return message from server
 		memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
-		
-		int count = 0;
-		charsRead = 0;
-		charsTotal = 0;
-		int sizeB = -1;
-		char * ptr;
+		charsTotal = recvMsg(socketFD, buffer, MSGMAX, 0);
 
-		// Receive message from server
-		while(sizeB != charsTotal) {
-			charsRead = recv(socketFD, buffer + charsTotal, sizeof(buffer)-1, 0);
-			if (charsRead < 0) {
-				perror("Error reading from socket");
-				exit(1);
-			}
-			if (count == 0) {
-				ptr = strchr(buffer, ' ');
-				sizeB = atoi(buffer);
-				*ptr++ = '\0';
-				count++;
-			}
-			charsTotal += charsRead;	// add to offset next receive
-		}
-		if (strcmp(ptr, "\\quit") == 0) {
-			quit = 1;
-		}
-		else { 
-			printf("Serv> %s\n", ptr);
+		if (charsTotal < 0) {
+			break;
 		}
 	}
 	close(socketFD); // Close the socket

@@ -23,9 +23,9 @@ def main():
     quit = False
     while True:
         connection, addr = s.accept()
-        print("Connected to", addr)
+        print("New Session connected to:"+str(addr))
         recv = 0
-
+        client = ""
         while not quit:
             msg = ""
             count = 0
@@ -35,7 +35,6 @@ def main():
             while True:
                 data = connection.recv(CHARMAX)
                 msg += str(data.decode())
-                # print("Client loop> " + msg)
 
                 if count == 0:
                     size = int(msg.partition(" ")[0])
@@ -49,22 +48,26 @@ def main():
 
             if recv == 1:
                 #set to handler for client
-                recv = recv
+                client = msg
+                continue
 
             if msg == "\quit":
                 break
 
-            print("Client> " + msg)
+            print(client+"> " + msg)
 
             # Prompt user for response
-            buffer = input("You> ")
+            buffer = input("Server> ")
 
             # if input is to quit connection
             if buffer == "\quit":
                 quit = True
 
-            size = math.floor(math.log(len(buffer),10))+2
-            buffer = str(size + len(buffer)) + " " + buffer
+            sizeB = len(buffer)
+            size = len(str(sizeB)) + sizeB + 1
+            if len(str(sizeB)) < len(str(size)):
+                size += 1
+            buffer = str(size) + " " + buffer
 
             # Send message to client
             connection.sendall(buffer.encode())
