@@ -5,16 +5,44 @@ import string
 
 CHARMAX = 504
 
-def main():
+def recvMsg(connection):
+    msg = ""
+    count = 0
+    size = 0
+    
+    # Receive Loop
+    while True:
+        # block until data is received and decode to string
+        data = connection.recv(CHARMAX)
+        msg += str(data.decode())
 
+        if count == 0:
+            # read msg length from (<msg len>, msg)
+            size = int(msg.partition(" ")[0])
+            count += 1
+
+        if size == len(msg):
+            break
+    
+    # read msg from (<msg len>, msg)
+    msg = msg.partition(" ")[2]
+    return msg
+
+#*******************************************
+# Function Main
+# Description: Creates socket server to listen for respective client connections
+# Prerequisites: args[] contain: 
+#   {chatserve.py <port>}
+#*******************************************
+def main():
+    # Validate args
     if len(sys.argv) != 2:
         print("Invalid argument count")
         return
-
+    
+    # Create Socket and bind to port from args
     s = socket.socket()
     port = int(sys.argv[1])
-
-    # bind socket to port
     s.bind(('', port))
 
     # put socket on listen
@@ -34,26 +62,8 @@ def main():
 	    # Chat loop
 	     #****************
         while not quit:
-            msg = ""
-            count = 0
-            size = 0
-            
-            # Receive Loop
-            while True:
-                # block until data is received and decode to string
-                data = connection.recv(CHARMAX)
-                msg += str(data.decode())
-
-                if count == 0:
-                    # read msg length from (<msg len>, msg)
-                    size = int(msg.partition(" ")[0])
-                    count += 1
-
-                if size == len(msg):
-                    break
-            
-            # read msg from (<msg len>, msg)
-            msg = msg.partition(" ")[2]
+            # Receive message from client
+            msg = recvMsg(connection)
             recv += 1
 
             # If new session, set client handle

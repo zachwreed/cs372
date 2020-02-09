@@ -128,7 +128,7 @@ char* getHandle() {
 
 /***********************************************
 ** Function: Main
-** Prerequisite: args[] contains:
+** Prerequisite: args[] contain:
 **   {'chatclient', machine, serverport }
 ************************************************/
 int main(int argc, char *argv[])
