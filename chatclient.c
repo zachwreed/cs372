@@ -11,7 +11,7 @@
 
 #define MSGMAX 504
 #define INMAX 500
-#define HANDLE 16
+#define HANDLE 12
 
 /***********************************************
 ** Function: Error Handler
@@ -77,10 +77,10 @@ int sendMsg(int connectionFD, char* buffer, int flag) {
 }
 
 char* getHandle() {
-	char *handle = malloc(sizeof(char) * HANDLE);
+	char *handle = (char*)malloc(HANDLE);
 
-	printf("Enter a handle up to 15 characters: ");
-	fgets(handle, sizeof(handle) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
+	printf("Enter a handle up to 10 characters: ");
+	fgets(handle, HANDLE - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
 	handle[strcspn(handle, "\n")] = '\0'; // Remove the trailing \n that fgets adds
 	return handle;
 }
@@ -126,6 +126,7 @@ int main(int argc, char *argv[])
 	handle = getHandle();
 	int quit = 0;
 	while(quit != 1) {
+		fflush(stdin);
 		printf("%s> ", handle);
 		memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
 		memset(msg, '\0', sizeof(msg));

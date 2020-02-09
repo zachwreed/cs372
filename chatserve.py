@@ -44,6 +44,10 @@ def main():
                     break
             
             msg = msg.partition(" ")[2]
+            if msg == "\quit":
+                print("client quit")
+                break
+
             print("Client> " + msg)
 
             # Prompt user for response
