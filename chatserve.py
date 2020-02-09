@@ -24,6 +24,7 @@ def main():
     while True:
         connection, addr = s.accept()
         print("Connected to", addr)
+        recv = 0
 
         while not quit:
             msg = ""
@@ -44,8 +45,13 @@ def main():
                     break
             
             msg = msg.partition(" ")[2]
+            recv += 1
+
+            if recv == 1:
+                #set to handler for client
+                recv = recv
+
             if msg == "\quit":
-                print("client quit")
                 break
 
             print("Client> " + msg)
