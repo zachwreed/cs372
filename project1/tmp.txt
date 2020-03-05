@@ -1,0 +1,29 @@
+		char msg[MSGMAX]; 					// buffer for <num of bytes> + ' ' <msg>
+		char sizeBStr[LENMAX];
+		char sizeStr[LENMAX];
+		char len[LENMAX];
+		memset(msg, '\0', sizeof(msg));
+		memset(len, '\0', sizeof(len));
+		memset(sizeBStr, '\0', sizeof(sizeBStr));
+		memset(sizeStr, '\0', sizeof(sizeStr));
+
+		// Buffer length to string
+		int sizeB = strlen(buffer);
+		sprintf(sizeBStr, "%d", sizeB);
+
+		// sizeStr = buff length + sizeB + 1
+		int size = strlen(sizeBStr) + sizeB + 1;
+		sprintf(sizeStr, "%d", size);
+
+		// Add buffer length string to be added to message.
+		sprintf(len, "%d", size);
+		// If (size+offset) length > (size), add 1 
+		if (strlen(sizeStr) > strlen(sizeBStr)) {
+			printf("add 1");
+			memset(len, '\0', sizeof(len));
+			sprintf(len, "%d", (size+1));
+		}
+
+		strcat(len, " ");
+		strcat(msg, len);
+		strcat(msg, buffer);
