@@ -21,6 +21,7 @@ class Connection:
     serverHost = None
     serverPort = None
     dataPort = None
+    fileName = None
 
 
 def recvMsg(connection):
@@ -33,8 +34,7 @@ def recvMsg(connection):
         # block until data is received and decode to string
         data = connection.recv(CHARMAX)
         msg += str(data.decode())
-        print("msg:", msg)
-
+        # print(msg)
         if count == 0:
             # read msg length from (<msg len>, msg)
             size = int(msg.partition(" ")[0])
@@ -93,6 +93,7 @@ def main():
     elif len(sys.argv) == 6 and sys.argv[3] == "-g":
         command = formatGetReq(sys.argv)
         conn.dataPort = int(sys.argv[5])
+        conn.fileName = sys.argv[4]
 
     else:
         print("Invalid Command")
@@ -125,7 +126,12 @@ def main():
         print("Receiving directory structure from " + conn.serverHost + ":" + str(conn.serverPort))
         msg = msg.partition(LS)[2]
 
-
+    if msg.startswith(GET, 0, len(GET)):
+        file = open(conn.fileName, "w+")
+        file.write(msg.partition(GET)[2])
+        msg = "Receiving file:" + conn.serverHost + ":" + str(conn.serverPort)
+    
+    
     print(msg)
 
     s.close()
