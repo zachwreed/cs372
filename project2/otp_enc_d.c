@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <dirent.h> 
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -21,6 +22,27 @@ void error(const char *msg, int status) {
 	perror(msg);
 	exit(status);
 }
+
+// https://stackoverflow.com/questions/4204666/how-to-list-files-in-a-directory-in-a-c-program
+void getDir() {
+	  DIR *d;
+  struct dirent *dir;
+  d = opendir(".");
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+      printf("%s\n", dir->d_name);
+    }
+    closedir(d);
+  }
+}
+
+void getFile(char* buffer, char fileName) {
+    FILE* f = fopen(fileName, "r");
+	if (f == NULL) {
+		error("getFile:",1);
+	}
+}
+
 /***********************************************
 ** Function: Encrypt Buffer
 ** Description: Creates ciphertext from key and text
@@ -135,8 +157,8 @@ int main(int argc, char *argv[]) {
 	*******************************/
 	memset((char *)&serverAddress, '\0', sizeof(serverAddress)); // Clear out the address struct
 	portNumber = atoi(argv[1]); 								// Convert port to an integer from a string
-	serverAddress.sin_family = AF_INET; 				// Create a network-capable socket
-	serverAddress.sin_port = htons(portNumber); // Store the port number
+	serverAddress.sin_family = AF_INET; 
+	serverAddress.sin_port = htons(portNumber); 
 	serverAddress.sin_addr.s_addr = INADDR_ANY; // Any address is allowed for connection to this process
 
 	listenSocketFD = socket(AF_INET, SOCK_STREAM, 0); // Create the socket

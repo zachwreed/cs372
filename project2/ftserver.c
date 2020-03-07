@@ -12,10 +12,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <dirent.h> 
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <netdb.h> 
 #include <math.h>
@@ -25,6 +28,9 @@
 #define INMAX 510
 #define HANDLE 12
 #define LENMAX 5
+#define LS "-l "
+#define GET "-g "
+
 
 /***********************************************
 ** Function: Error Handler
@@ -32,15 +38,54 @@
 ************************************************/
 void error(const char *msg) { 
 	perror(msg); 
-	exit(0); 
+	exit(1);
 } 
+
+
+// https://stackoverflow.com/questions/4204666/how-to-list-files-in-a-directory-in-a-c-program
+void getDir(char* directory) {
+	  DIR *d;
+  struct dirent *dir;
+  d = opendir(directory);
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+      printf("%s\n", dir->d_name);
+    }
+    closedir(d);
+  }
+}
+
+
+/***********************************************
+** Function: Get File
+** Descripton: Opens file, copies to buffer, and returns filesize
+** Prerequisite: 
+************************************************/
+size_t getFile(char* buffer, char* fileName) {
+	// Open file
+    FILE* f = fopen(fileName, "r");
+	if (f == NULL) {
+		error("getFile:");
+		exit(1);
+	}
+	// Get lenght of file
+	fseek(f, 0, SEEK_END);
+	size_t fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	fread(buffer, sizeof(char), fsize, f);
+    fclose(f);
+
+	return fsize;
+}
+
 
 /***********************************************
 ** Function: Receive Message
 ** Descripton: Receives message from chatserve
 ** Prerequisite: buffer is memset to null, bSize contains positive integer, flag contains positive integer. Called within child of spawnPid
 ************************************************/
-int recvMsg(int socketFD, char* buffer, int bSize, int flag) {
+char* recvMsg(int socketFD, char* buffer, int bSize, int flag) {
 	int charsRead, charsTotal, count = 0; // stores recv() data, num of loops
 	int size = -1;	// stores strlen(buffer) of server resposne
 	char * ptr;		// stores msg portion of server response
@@ -49,8 +94,7 @@ int recvMsg(int socketFD, char* buffer, int bSize, int flag) {
 	while(size != charsTotal) {
 		charsRead = recv(socketFD, buffer + charsTotal, bSize, flag);
 		if (charsRead < 0) {
-			perror("Error from reading:");
-			exit(1);
+			error("Error from reading:");
 		}
 		// Parse <num bytes> from first packet
 		if (count == 0) {
@@ -61,13 +105,9 @@ int recvMsg(int socketFD, char* buffer, int bSize, int flag) {
 		}
 		charsTotal += charsRead;	// add to offset next receive
 	}
-	// If server reponses with quit, return negative value
-	if (strcmp(ptr, "\\quit") == 0) {
-		return -1;
-	}
-	// Print server response
-	printf("Server> %s\n", ptr);
-	return charsTotal;
+	printf("ptr: %s\n", ptr);
+
+	return ptr;
 }
 
 /***********************************************
@@ -81,6 +121,8 @@ int sendMsg(int socketFD, char* buffer, int flag) {
 		char sizeBStr[LENMAX];	// Stores <str(strlen(buffer))>
 		char sizeStr[LENMAX];	// Stores <sizeBStr> + size + 1/2
 		char len[LENMAX];		// stores result from sizeStr
+		char* ptr;		// stores msg portion of server response
+
 		int charsWritten = 0;	// stores send() return
 		int charsTotal = 0;		// stores send() returns
 		memset(msg, '\0', sizeof(msg));
@@ -110,6 +152,11 @@ int sendMsg(int socketFD, char* buffer, int flag) {
 		strcat(msg, len);
 		strcat(msg, buffer);
 		
+		// printf("To client buffer: %s\n", buffer);
+		// printf("To client len: %s\n", len);
+		// printf("To Client msg: %s\n", msg);
+
+
 		// block until all data is sent
 		while (charsTotal < strlen(msg)) {
 			charsWritten = send(socketFD, msg + charsTotal, strlen(msg), 0);
@@ -125,109 +172,121 @@ int sendMsg(int socketFD, char* buffer, int flag) {
 }
 
 /***********************************************
-** Function: Get Handle
-** Description: Prompts user for chat handle to use during session
-** Prerequisite: None
-************************************************/
-char* getHandle() {
-	char *handle = (char*)malloc(HANDLE);
-
-	printf("Enter a handle up to 5 characters: ");
-	fgets(handle, HANDLE - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
-	handle[strcspn(handle, "\n")] = '\0'; // Remove the trailing \n that fgets adds
-	return handle;
-}
-
-/***********************************************
 ** Function: Main
 ** Prerequisite: args[] contain:
 **   {chatclient <machine> <server port> }
 ************************************************/
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	// Call with ./client localhost <server port>
 	int socketFD, portNumber, charsWritten, charsRead, charsTotal;
-	struct sockaddr_in serverAddress;	// stores socket address data
-	struct hostent* serverHostInfo;		// stores host connection data
-	char buffer[INMAX]; 				// buffer for input
-	char msg[MSGMAX]; 					// buffer for <bufer strlen> + ' ' <buffer>
-	char *handle = malloc(sizeof(char) * HANDLE);	// stores client handle
+	int establishedConnectionFD;		// file descriptor to connection
+	int listenSocketFD;					// socket file descriptor
+	struct sockaddr_in serverAddress;	// stores socket address of host
+	struct sockaddr_in clientAddress; // stores socket address of client
+
+	socklen_t sizeOfClientInfo;			// Holds sizeof() client address
+	char* ptr;		// stores msg portion of server response
+	char buffer[INMAX];				// buffer for input
+	char command[INMAX];
+
+	pid_t spawnPid = -5;	// holds spawn child process
 
 	// Check args == chatclient <machine> <server port>
-	if (argc < 2) { 
-		fprintf(stderr,"USAGE: %s hostname port\n", argv[0]); 
-		exit(1); 
+	if (argc < 1) { 
+		fprintf(stderr,"USAGE: %s hostname port\n", argv[0]);
+		exit(1);
 	}
-
 	// Set up the server address struct
 	memset((char*)&serverAddress, '\0', sizeof(serverAddress)); // Clear address struct
-	portNumber = atoi(argv[2]); // Get the port number
+	portNumber = atoi(argv[1]); // Get the port number
+	printf("Port number = %d\n", portNumber);
 	serverAddress.sin_family = AF_INET; // Create a network-capable socket
 	serverAddress.sin_port = htons(portNumber); // Store the port number
-	//serverHostInfo = gethostbyname(argv[1]); // Convert the machine name into address
-	// if (serverHostInfo == NULL) { 
-	// 	fprintf(stderr, "CLIENT: ERROR, no such host\n"); 
-	// 	exit(0); 
-	// }
+	serverAddress.sin_addr.s_addr = INADDR_ANY; // Any address is allowed for connection to this process
 
-	// Copy the address
-	memcpy((char*)&serverAddress.sin_addr.s_addr, (char*)serverHostInfo->h_addr, serverHostInfo->h_length);
-
-	// Set up the socket
-	socketFD = socket(AF_INET, SOCK_STREAM, 0); // Create the socket
-	if (socketFD < 0) {
-		error("CLIENT: ERROR opening socket");
+ 	// Create the socket
+	listenSocketFD = socket(AF_INET, SOCK_STREAM, 0);
+	if (listenSocketFD < 0) {
+		error("ERROR opening socket");
 	}
-
-	// Connect to server & socket to address
-	if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
-		error("CLIENT: ERROR connecting");
+	// Enable the socket to begin listening & connect socket to port
+	if (bind(listenSocketFD, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+		error("ERROR on binding");
 	}
+	// Flip the socket on - it can now receive up to 5 connections
+	listen(listenSocketFD, 5);
+	printf("Server is listening on port: %d\n", portNumber);
 
-	// Get Handle from User
-	handle = getHandle();
-	// Init variables for loop
-	int sendN = 0;
-	int quit = 0;
+	while(1) {
+		// Get the size of the address for the client that will connect
+		sizeOfClientInfo = sizeof(clientAddress); 
 
-	/******************
-	 * Chat loop
-	 *****************/
-	while(quit != 1) {
-		fflush(stdin); // clear stdin
-
-		// If new session, send handle to server
-		if (sendN == 0) {
-			sendMsg(socketFD, handle, 0);
-			sendN++;
-			continue;
+		// Accept a connection
+		establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); // Accept
+		if (establishedConnectionFD < 0) {
+			printf("%d\n",establishedConnectionFD);
+			error("ERROR on accept");
 		}
+		/******************************
+		** Fork once handshake begins, child process will handle connection
+		*******************************/
+		spawnPid = fork();
 
-		// Get user Input 
-		printf("%s> ", handle);					
-		memset(buffer, '\0', sizeof(buffer)); 		// Clear Buffer
-		memset(msg, '\0', sizeof(msg));				// Clear Msg
-		fgets(buffer, sizeof(buffer) - 1, stdin); 	// Get input from the user, trunc to buffer - 1 chars, leaving \0
-		buffer[strcspn(buffer, "\n")] = '\0'; 		// Remove the trailing \n
-		
-		// If quit input, send quit to server and break loop
-		if (strcmp(buffer, "\\quit") == 0) {
-			sendMsg(socketFD, buffer, 0);
-			break;
-		} 
-		// Send message to server
-		sendMsg(socketFD, buffer, 0);
-		sendN++;
+		switch(spawnPid) {
+			case -1:
+				error("Hull Breach");
+				break;
 
-		// Get return message from server
-		memset(buffer, '\0', sizeof(buffer)); // Clear Buffer
-		charsTotal = recvMsg(socketFD, buffer, MSGMAX, 0);
-		// If '\quit' from server
-		if (charsTotal < 0) {
-			break;
+			/******************************
+			** Child: handles connection from otp_enc
+			*******************************/
+			case 0:
+			// Receive command from ftclient
+			memset(buffer, '\0', sizeof(buffer)); // Clear Buffer
+			memset(command, '\0', sizeof(command)); // Clear Buffer
+			strcat(command, recvMsg(establishedConnectionFD, buffer, MSGMAX, 0));
+
+			printf("From Client: %s\n", command);
+			memset(buffer, '\0', sizeof(buffer)); 
+
+			// Do something with user command
+			if (strncmp(command, LS, strlen(LS)) == 0) {
+				
+				ptr = strchr(command, ' ');
+				*ptr++ = '\0';
+				printf("Requested ls of dir: %s\n", ptr);
+
+
+				memset(buffer, '\0', sizeof(buffer)); 
+				strcat(buffer, "Fill with Directory");
+
+			}
+			else if (strncmp(command, GET, strlen(GET)) == 0) {
+				ptr = strchr(command, ' ');
+				*ptr++ = '\0';
+
+				printf("Requested File: %s\n", ptr);
+				strcat(buffer, "Fill with File");
+			}
+			else {
+				printf("Client Error\n");
+				memset(buffer, '\0', sizeof(buffer)); 
+				strcat(buffer, "Invalid command");
+			}
+
+			sendMsg(establishedConnectionFD, buffer, 0);
+
+			// Do something with response
+
+			// Send message to server
+			// sendMsg(socketFD, buffer, 0);
+
+			default:
+				close(establishedConnectionFD);
+				break;
 		}
 	}
 	// Close the socket
-	close(socketFD);
+	close(listenSocketFD);
 	return 0;
 }

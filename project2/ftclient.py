@@ -12,6 +12,7 @@ import sys
 import math
 import string
 
+
 CHARMAX = 514
 
 def recvMsg(connection):
@@ -24,6 +25,7 @@ def recvMsg(connection):
         # block until data is received and decode to string
         data = connection.recv(CHARMAX)
         msg += str(data.decode())
+        # print("msg:", msg)
 
         if count == 0:
             # read msg length from (<msg len>, msg)
@@ -50,61 +52,36 @@ def main():
         return
     
     # Create Socket and bind to port from args
-    s = socket.socket()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     port = int(sys.argv[1])
-    s.bind(('', port))
-
+    print(port)
+    s.connect(('flip3.engr.oregonstate.edu', port))
     # put socket on listen
-    s.listen(5)
 
-    quit = False
     #****************
 	# Server Loop
 	#****************
-    while True:
-        connection, addr = s.accept()
-        print("New Session connected to:"+str(addr))
-        recv = 0
-        client = ""
 
-        #****************
-	    # Chat loop
-	     #****************
-        while not quit:
-            # Receive message from client
-            msg = recvMsg(connection)
-            recv += 1
+    # Prompt user for response
+    buffer = input("Client> ")
 
-            # If new session, set client handle
-            if recv == 1:
-                client = msg
-                continue
-            
-            # If client quit, end chat loop
-            if msg == "\quit":
-                break
 
-            print(client+"> " + msg)
+    # Get <size buffer> and <len(size buffer + ' ')>
+    sizeB = len(buffer)
+    size = len(str(sizeB)) + sizeB + 1
 
-            # Prompt user for response
-            buffer = input("Server> ")
+    # If (size+offset) length > (size), add 1 
+    if len(str(sizeB)) < len(str(size)):
+        size += 1
+    buffer = str(size) + " " + buffer
 
-            # if input is to quit connection
-            if buffer == "\quit":
-                quit = True
+    # Send message to client
+    s.sendall(buffer.encode())
 
-            # Get <size buffer> and <len(size buffer + ' ')>
-            sizeB = len(buffer)
-            size = len(str(sizeB)) + sizeB + 1
+    # Receive and output message 
+    msg = recvMsg(s)
+    print(msg)
 
-		    # If (size+offset) length > (size), add 1 
-            if len(str(sizeB)) < len(str(size)):
-                size += 1
-            buffer = str(size) + " " + buffer
-
-            # Send message to client
-            connection.sendall(buffer.encode())
-
-        connection.close()
     s.close()
+
 main()
