@@ -43,18 +43,31 @@ void error(const char *msg) {
 
 
 // https://stackoverflow.com/questions/4204666/how-to-list-files-in-a-directory-in-a-c-program
-void getDir(char* directory) {
-	  DIR *d;
-  struct dirent *dir;
-  d = opendir(directory);
-  if (d) {
-    while ((dir = readdir(d)) != NULL) {
-      printf("%s\n", dir->d_name);
-    }
-    closedir(d);
-  }
-}
+int getDir(char* buffer) {
+	DIR *directory;
+	struct dirent *dFile;
+	char file[MSGMAX] ;
+	memset(file, '\0', sizeof(file));
+	strncat(file, LS, strlen(LS));
 
+	directory = opendir(".");
+	if (directory) {
+		while ((dFile = readdir(directory)) != NULL) {
+
+			if (strcmp(dFile->d_name, ".") == 0 || strcmp(dFile->d_name, "..") == 0) {
+				continue;
+			}
+
+			strncat(file, dFile->d_name, strlen(dFile->d_name));
+			strncat(file, "\n", 1);
+		}
+		closedir(directory);
+		strncat(buffer, file, strlen(file));
+		// printf("In getDir buff: %s\n", buffer);
+		return 0;
+	}
+	return 1;
+}
 
 /***********************************************
 ** Function: Get File
@@ -241,7 +254,7 @@ int main(int argc, char *argv[]) {
 			** Child: handles connection from otp_enc
 			*******************************/
 			case 0:
-			// Receive command from ftclient
+			// Receive host + command from ftclient
 			memset(buffer, '\0', sizeof(buffer)); // Clear Buffer
 			memset(command, '\0', sizeof(command)); // Clear Buffer
 			strcat(command, recvMsg(establishedConnectionFD, buffer, MSGMAX, 0));
@@ -250,16 +263,12 @@ int main(int argc, char *argv[]) {
 			memset(buffer, '\0', sizeof(buffer)); 
 
 			// Do something with user command
-			if (strncmp(command, LS, strlen(LS)) == 0) {
-				
-				ptr = strchr(command, ' ');
-				*ptr++ = '\0';
-				printf("Requested ls of dir: %s\n", ptr);
-
-
+			if (strncmp(command, LS, strlen(command)) == 0) {
 				memset(buffer, '\0', sizeof(buffer)); 
-				strcat(buffer, "Fill with Directory");
-
+				if (getDir(buffer) != 0) {
+					printf("Buffer after getDir: %s\n", buffer);
+					strcat(buffer, "Error opening directory");
+				}
 			}
 			else if (strncmp(command, GET, strlen(GET)) == 0) {
 				ptr = strchr(command, ' ');
