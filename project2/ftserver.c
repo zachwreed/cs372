@@ -74,21 +74,25 @@ int getDir(char* buffer) {
 ** Descripton: Opens file, copies to buffer, and returns filesize
 ** Prerequisite: 
 ************************************************/
-size_t getFile(char* buffer, char* fileName) {
-	// Open file
-    FILE* f = fopen(fileName, "r");
+int getFile(char* buffer, char* fileName) {
+	// Find file
+	char fname[INMAX];
+	memset(fname, '\0', sizeof(fname));
+	strcat(fname, fileName);
+
+    FILE* f = fopen(fname, "r");
 	if (f == NULL) {
-		error("getFile:");
-		exit(1);
+		return -1;
 	}
 	// Get lenght of file
 	fseek(f, 0, SEEK_END);
-	size_t fsize = ftell(f);
+	int fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
 	fread(buffer, sizeof(char), fsize, f);
     fclose(f);
 
+	
 	return fsize;
 }
 
@@ -134,7 +138,7 @@ int sendMsg(int socketFD, char* buffer, int flag) {
 		char sizeBStr[LENMAX];	// Stores <str(strlen(buffer))>
 		char sizeStr[LENMAX];	// Stores <sizeBStr> + size + 1/2
 		char len[LENMAX];		// stores result from sizeStr
-		char* ptr;		// stores msg portion of server response
+
 
 		int charsWritten = 0;	// stores send() return
 		int charsTotal = 0;		// stores send() returns
@@ -197,12 +201,19 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in serverAddress;	// stores socket address of host
 	struct sockaddr_in clientAddress; // stores socket address of client
 
-	socklen_t sizeOfClientInfo;			// Holds sizeof() client address
-	char* ptr;		// stores msg portion of server response
-	char buffer[INMAX];				// buffer for input
+	socklen_t sizeOfClientInfo;	// Holds sizeof() client address
+	char* ptr;
+	char clientHost[34];
+	char clientPort[10];
+	char fileName[INMAX];				
+	char buffer[INMAX];			// buffer for input
 	char command[INMAX];
 
 	pid_t spawnPid = -5;	// holds spawn child process
+
+	memset(clientHost, '\0', sizeof(clientHost));
+	memset(clientPort, '\0', sizeof(clientPort));
+	memset(fileName, '\0', sizeof(fileName));
 
 	// Check args == chatclient <machine> <server port>
 	if (argc < 1) { 
@@ -259,36 +270,78 @@ int main(int argc, char *argv[]) {
 			memset(command, '\0', sizeof(command)); // Clear Buffer
 			strcat(command, recvMsg(establishedConnectionFD, buffer, MSGMAX, 0));
 
-			printf("From Client: %s\n", command);
-			memset(buffer, '\0', sizeof(buffer)); 
-
 			// Do something with user command
-			if (strncmp(command, LS, strlen(command)) == 0) {
-				memset(buffer, '\0', sizeof(buffer)); 
-				if (getDir(buffer) != 0) {
-					printf("Buffer after getDir: %s\n", buffer);
-					strcat(buffer, "Error opening directory");
-				}
-			}
-			else if (strncmp(command, GET, strlen(GET)) == 0) {
-				ptr = strchr(command, ' ');
-				*ptr++ = '\0';
+			if (strncmp(command, LS, strlen(LS)) == 0) {
+				// Parse client host
 
-				printf("Requested File: %s\n", ptr);
-				strcat(buffer, "Fill with File");
+				char* token = strtok(command, " ");
+				int tcount = 1;
+  				while (token != NULL) { 
+					token = strtok(NULL, " "); 
+					tcount++;
+					if (tcount == 2) {
+						strcat(clientHost, token);
+					}
+					else if (tcount == 3) {
+						strcat(clientPort, token);
+					}
+				}
+				printf("Connection from %s:%s\n", clientHost, clientPort);
+
+
+				if (tcount == 4) {
+					memset(buffer, '\0', sizeof(buffer)); 
+					if (getDir(buffer) != 0) {
+						printf("Buffer after getDir: %s\n", buffer);
+						strcat(buffer, "ERROR UNABLE TO OPEN DIRECTORY");
+					}
+				}
+				else {
+					strcat(buffer, "ERROR INVALID ARGS");
+				} 
+			}
+
+			else if (strncmp(command, GET, strlen(GET)) == 0) {
+
+				char* token = strtok(command, " ");
+				int tcount = 1;
+  				while (token != NULL) { 
+					token = strtok(NULL, " "); 
+					tcount++;
+					if (tcount == 2) {
+						strcat(fileName, token);
+					}
+					if (tcount == 3) {
+						strcat(clientHost, token);
+					}
+					else if (tcount == 4) {
+						strcat(clientPort, token);
+					}
+				}
+				printf("Connection from %s\n", clientHost);
+				printf("File \"%s\" requested on port %s\n", fileName, clientPort);
+				
+				if (tcount == 5) {
+					memset(buffer, '\0', sizeof(buffer)); 
+					if (getFile(buffer, fileName) < 0) {
+						printf("File not found. Sending error message to %s:%s\n", clientHost, clientPort);
+						strcat(buffer, "ERROR FILE NOT FOUND");
+					} 
+					else {
+						printf("Sending \"%s\" to %s:%s\n", fileName, clientHost, clientPort);
+					}
+				}
+				else {
+					strcat(buffer, "ERROR INVALID ARGS");
+				} 
 			}
 			else {
 				printf("Client Error\n");
 				memset(buffer, '\0', sizeof(buffer)); 
-				strcat(buffer, "Invalid command");
+				strcat(buffer, "ERROR INVALID COMMAND");
 			}
 
 			sendMsg(establishedConnectionFD, buffer, 0);
-
-			// Do something with response
-
-			// Send message to server
-			// sendMsg(socketFD, buffer, 0);
 
 			default:
 				close(establishedConnectionFD);
