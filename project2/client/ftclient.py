@@ -25,31 +25,7 @@ class Connection:
     fileName = None
 
 
-def recvMsg(connection):
-    msg = ""
-    count = 0
-    size = 0
-    
-    # Receive Loop
-    while True:
-        # block until data is received and decode to string
-        data = connection.recv(CHARMAX)
-        msg += str(data.decode())
-        print(msg)
-        if count == 0:
-            # read msg length from (<msg len>, msg)
-            size = int(msg.partition(" ")[0])
-            count += 1
-
-        if size == len(msg):
-            break
-    
-    # read msg from (<msg len>, msg)
-    msg = msg.partition(" ")[2]
-    return msg
-
-
-def recvFile(connection, fileName):
+def recvDir(connection):
     msg = ""
     count = 0
     size = 0
@@ -59,6 +35,42 @@ def recvFile(connection, fileName):
     while True:
         # block until data is received and decode to string
         data = connection.recv(CHARMAX)
+        msg += str(data.decode())
+
+        if count == 0:
+            # read msg length from (<msg len>, msg)
+            size = int(msg.partition(" ")[0])
+            msg = msg.partition(" ")[2]
+
+            if not msg.startswith(ERROR, 0, len(ERROR)):
+                msg = msg.partition(LS)[2]
+
+            else:
+                msg = msg.partition(ERROR)[2]
+                return msg
+
+        sbytes = sbytes + len(data)
+
+        if sbytes >= size:
+            break
+
+        count += 1
+
+    
+    # read msg from (<msg len>, msg)
+    return msg
+
+
+def recvFile(socket, conn):
+    msg = ""
+    count = 0
+    size = 0
+    sbytes = 0
+
+    # Receive Loop
+    while True:
+        # block until data is received and decode to string
+        data = socket.recv(CHARMAX)
         msg = data.decode("utf-8", errors='ignore')
 
         if count == 0:
@@ -67,21 +79,24 @@ def recvFile(connection, fileName):
             msg = msg.partition(" ")[2]
 
             if not msg.startswith(ERROR, 0, len(ERROR)):
-                file = open(fileName, "w")
+                print("Receiving \"" + conn.fileName + "\" from " + conn.serverHost +":"+str(conn.serverPort))
+                file = open(conn.fileName, "w")
 
             else:
-                print("Error from server")
-                break
+                msg = msg.partition(ERROR)[2]
+                return conn.serverHost +":"+str(conn.serverPort) + " says " + msg 
 
-        count += 1
         file.write(msg)
         sbytes = sbytes + len(data)
 
+        # if transfer has ended
         if sbytes >= size:
+            msg = "File transfer complete"
             break 
 
-    # read msg from (<msg len>, msg)
+        count += 1
 
+    return msg
 
 
 def formatBuffer(buffer):
@@ -158,24 +173,17 @@ def main():
 	# Server Loop
 	#****************
 
-    # Send message to client
-
-    # Receive and output message 
-    recvFile(s, conn.fileName)
-    # msg = recvMsg(s)
-
-    if msg.startswith(LS, 0, len(LS)):
+    if command == LS:
         print("Receiving directory structure from " + conn.serverHost + ":" + str(conn.serverPort))
-        msg = msg.partition(LS)[2]
+        msg = recvDir(s)
+        print(msg)
 
-    if msg.startswith(GET, 0, len(GET)):
-        file = open(conn.fileName, "w+")
-        file.write(msg.partition(GET)[2])
-        msg = "Receiving file:" + conn.serverHost + ":" + str(conn.serverPort)
-    
-    
-    print(msg)
 
+    elif command == GET:
+        msg = recvFile(s, conn)
+        print(msg)
+
+ 
     s.close()
 
 main()
