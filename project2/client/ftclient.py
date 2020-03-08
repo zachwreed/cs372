@@ -12,9 +12,10 @@ import sys
 import math
 import string
 
-CHARMAX = 514
+CHARMAX = 100000000
 LS = "-l "
 GET = "-g "
+ERROR = "-e "
 OSU = ".engr.oregonstate.edu"
 
 class Connection:
@@ -34,7 +35,7 @@ def recvMsg(connection):
         # block until data is received and decode to string
         data = connection.recv(CHARMAX)
         msg += str(data.decode())
-        # print(msg)
+        print(msg)
         if count == 0:
             # read msg length from (<msg len>, msg)
             size = int(msg.partition(" ")[0])
@@ -46,6 +47,42 @@ def recvMsg(connection):
     # read msg from (<msg len>, msg)
     msg = msg.partition(" ")[2]
     return msg
+
+
+def recvFile(connection, fileName):
+    msg = ""
+    count = 0
+    size = 0
+    sbytes = 0
+
+    # Receive Loop
+    while True:
+        # block until data is received and decode to string
+        data = connection.recv(CHARMAX)
+        msg = data.decode("utf-8", errors='ignore')
+
+        if count == 0:
+            # read msg length from (<msg len>, msg)
+            size = int(msg.partition(" ")[0])
+            msg = msg.partition(" ")[2]
+
+            if not msg.startswith(ERROR, 0, len(ERROR)):
+                file = open(fileName, "w")
+
+            else:
+                print("Error from server")
+                break
+
+        count += 1
+        file.write(msg)
+        sbytes = sbytes + len(data)
+
+        if sbytes >= size:
+            break 
+
+    # read msg from (<msg len>, msg)
+
+
 
 def formatBuffer(buffer):
     # Get <size buffer> and <len(size buffer + ' ')>
@@ -83,15 +120,19 @@ def formatGetReq(args):
 #*******************************************
 def main():
     # Validate args
+    buffer = None
     command = None
+
     conn = Connection()
 
     if len(sys.argv) == 5 and sys.argv[3] == "-l":
-        command = formatListReq(sys.argv)
+        command = LS
+        buffer = formatListReq(sys.argv)
         conn.dataPort = int(sys.argv[4])
 
     elif len(sys.argv) == 6 and sys.argv[3] == "-g":
-        command = formatGetReq(sys.argv)
+        command = GET
+        buffer = formatGetReq(sys.argv)
         conn.dataPort = int(sys.argv[5])
         conn.fileName = sys.argv[4]
 
@@ -99,7 +140,7 @@ def main():
         print("Invalid Command")
         return
 
-    print(command)
+    # print(command)
     conn.serverHost = sys.argv[1]
     conn.serverPort = int(sys.argv[2])
 
@@ -109,18 +150,19 @@ def main():
     s.connect((conn.serverHost+OSU, conn.serverPort))
     # put socket on listen
 
+    # Prompt user for response
+    msg = formatBuffer(buffer)
+    s.sendall(msg.encode())
+
     #****************
 	# Server Loop
 	#****************
 
-    # Prompt user for response
-    msg = formatBuffer(command)
-
     # Send message to client
-    s.sendall(msg.encode())
 
     # Receive and output message 
-    msg = recvMsg(s)
+    recvFile(s, conn.fileName)
+    # msg = recvMsg(s)
 
     if msg.startswith(LS, 0, len(LS)):
         print("Receiving directory structure from " + conn.serverHost + ":" + str(conn.serverPort))
