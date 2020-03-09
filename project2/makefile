@@ -1,6 +1,8 @@
-# ** Zach Reed
-# ** CS-372
-# ** Makefile for ftserver.c 
+# Author: Zach Reed
+# Course: CS-372-400
+# Description: Makefile for ftserver.c 
+# Date: 3/8/2020
+
 # *********************************************
 
 CXX = gcc	#enables gcc as compiler
